@@ -7,9 +7,9 @@ export default function HRDashboard() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold mb-2">HR Manager Dashboard</h1>
+        <h1 className="text-3xl font-bold mb-2">Policy Dashboard</h1>
         <p className="text-muted-foreground">
-          Manage policy documents, analyze employee queries, and identify compliance gaps.
+          Manage policy documents, analyze queries, and identify compliance gaps.
         </p>
       </div>
 

@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Subscribt AI is a dual-sided policy analysis platform that enables organizations and their employees to query uploaded policy documents using AI. The system serves two distinct personas: HR Managers who upload and manage policy documents, and Employees (the default persona) who query documents to understand their rights and obligations. The platform translates dense legal language into actionable guidance while maintaining 100% fidelity to source material through strict grounding and verifiable citations.
+Subscribt AI is a policy analysis platform that enables users to upload, manage, and query policy documents using AI. The platform translates dense legal language into actionable guidance while maintaining 100% fidelity to source material through strict grounding and verifiable citations.
 
 ## Glossary
 
@@ -249,9 +249,7 @@ Subscribt AI is a dual-sided policy analysis platform that enables organizations
 
 1. THE System SHALL use shadcn/ui components as the base for all UI elements
 2. THE System SHALL place shared UI components in components/ui/
-3. THE System SHALL place HR-specific components in components/hr/
-4. THE System SHALL place Employee-specific components in components/employee/
-5. THE System SHALL NOT share persona-specific components across personas
+3. THE System SHALL place feature-specific components in components/
 
 ### Requirement 20: Centralized Business Logic
 
@@ -264,4 +262,3 @@ Subscribt AI is a dual-sided policy analysis platform that enables organizations
 3. THE System SHALL place all OpenSearch operations in lib/opensearch/
 4. THE System SHALL place all Chat_Service client utilities in lib/chat/
 5. THE System SHALL NOT include database or AI calls outside these designated directories
-

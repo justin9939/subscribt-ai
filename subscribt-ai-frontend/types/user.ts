@@ -3,11 +3,6 @@
  */
 
 /**
- * User persona types
- */
-export type Persona = 'hr_manager' | 'employee';
-
-/**
  * User profile
  */
 export interface User {
@@ -17,8 +12,6 @@ export interface User {
   email: string;
   /** User display name */
   name: string;
-  /** User persona */
-  persona: Persona;
   /** Organization identifier */
   organizationId: string;
   /** Account creation timestamp (ISO 8601) */
@@ -37,8 +30,6 @@ export interface Organization {
   name: string;
   /** Number of employees */
   employeeCount?: number;
-  /** Number of HR managers */
-  hrManagerCount?: number;
   /** Number of uploaded documents */
   documentCount?: number;
   /** Account creation timestamp (ISO 8601) */
