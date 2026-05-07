@@ -5,7 +5,7 @@
 ```
 /
 ├── app/                    # Next.js App Router
-├── components/             # Shared and persona-specific UI components
+├── components/             # Shared UI components
 ├── lib/                    # Core business logic and integrations
 ├── types/                  # Shared TypeScript types and interfaces
 ├── hooks/                  # Custom React hooks
@@ -18,15 +18,12 @@
 
 ```
 app/
-├── (hr)/                   # HR Manager route group
-│   └── ...                 # HR-specific pages (dashboard, upload, analytics)
-├── (employee)/             # Employee route group
-│   └── ...                 # Employee-specific pages (query, rights lookup)
+├── dashboard/              # Main dashboard (analytics, trends)
+├── upload/                 # Document upload and management
+├── query/                  # Query interface
 └── api/
     └── upload/             # Handles file upload to S3 (triggers Step Functions via EventBridge)
 ```
-
-Route groups `(hr)` and `(employee)` enforce persona separation at the routing level. Shared layouts and navigation live at the group root.
 
 **Note**: The chat endpoint is a Lambda Function URL called directly from the frontend, not a Next.js API route.
 
@@ -36,13 +33,13 @@ Route groups `(hr)` and `(employee)` enforce persona separation at the routing l
 
 ```
 components/
-├── hr/                     # HR-only components (gap analysis UI, trend charts, upload)
-├── employee/               # Employee-only components (query interface, scenario tester)
+├── dashboard/              # Analytics and trend visualization components
+├── upload/                 # Document upload and management components
+├── query/                  # Query interface components
 └── ui/                     # shadcn/ui primitives and shared components
 ```
 
 - Use shadcn/ui components as the base; extend rather than replace.
-- Persona-specific components go in their respective subdirectory — never share HR components into the employee flow or vice versa.
 
 ---
 
@@ -65,7 +62,6 @@ lib/
 
 ## Conventions
 
-- **Persona separation is structural**: HR and Employee code paths are separated by folder, not just conditionals. A component or route that serves both personas is a red flag.
 - **No DB calls outside `lib/db/`**: Centralizes query logic and keeps data access auditable.
 - **No AI calls outside `lib/ai/`**: All prompt construction and model calls live here, ensuring grounding rules are applied consistently.
 - **Types in `/types`**: Shared interfaces (e.g., `Document`, `QueryResult`, `Citation`) live here, not co-located with components.

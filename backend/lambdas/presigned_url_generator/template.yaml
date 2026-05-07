@@ -1,0 +1,174 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Pre-signed URL Generator Lambda for Subscribt AI
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+  
+  DocumentBucketName:
+    Type: String
+    Description: S3 bucket name for document storage
+  
+  DocumentMetadataTableName:
+    Type: String
+    Description: DynamoDB table name for document metadata
+  
+  PresignedUrlExpiration:
+    Type: Number
+    Default: 3600
+    Description: Pre-signed URL expiration time in seconds
+  
+  MaxFileSizeMB:
+    Type: Number
+    Default: 100
+    Description: Maximum file size in megabytes
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 30
+    MemorySize: 256
+    Tracing: Active
+    Environment:
+      Variables:
+        POWERTOOLS_SERVICE_NAME: presigned-url-generator
+        POWERTOOLS_METRICS_NAMESPACE: SubscribtAI
+        LOG_LEVEL: INFO
+
+Resources:
+  # Lambda Function
+  PresignedUrlGeneratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub subscribt-ai-presigned-url-generator-${Environment}
+      CodeUri: .
+      Handler: handler.handler
+      Description: Generates pre-signed S3 upload URLs for document uploads
+      Environment:
+        Variables:
+          S3_BUCKET_NAME: !Ref DocumentBucketName
+          DYNAMODB_TABLE_NAME: !Ref DocumentMetadataTableName
+          PRESIGNED_URL_EXPIRATION: !Ref PresignedUrlExpiration
+          MAX_FILE_SIZE_MB: !Ref MaxFileSizeMB
+      Policies:
+        - S3WritePolicy:
+            BucketName: !Ref DocumentBucketName
+        - DynamoDBWritePolicy:
+            TableName: !Ref DocumentMetadataTableName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - xray:PutTraceSegments
+                - xray:PutTelemetryRecords
+              Resource: '*'
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /api/upload/presigned-url
+            Method: POST
+            RestApiId: !Ref PresignedUrlApi
+      Tags:
+        Environment: !Ref Environment
+        Service: subscribt-ai
+        Component: presigned-url-generator
+
+  # API Gateway
+  PresignedUrlApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub subscribt-ai-presigned-url-api-${Environment}
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'POST, OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"  # Configure appropriately for production
+      TracingEnabled: true
+      Tags:
+        Environment: !Ref Environment
+        Service: subscribt-ai
+
+  # CloudWatch Log Group
+  PresignedUrlGeneratorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/subscribt-ai-presigned-url-generator-${Environment}
+      RetentionInDays: 30
+
+  # CloudWatch Alarms
+  PresignedUrlGeneratorErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub subscribt-ai-presigned-url-generator-errors-${Environment}
+      AlarmDescription: Alert when error rate exceeds threshold
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PresignedUrlGeneratorFunction
+      TreatMissingData: notBreaching
+
+  PresignedUrlGeneratorThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub subscribt-ai-presigned-url-generator-throttles-${Environment}
+      AlarmDescription: Alert when function is throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PresignedUrlGeneratorFunction
+      TreatMissingData: notBreaching
+
+  PresignedUrlGeneratorDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub subscribt-ai-presigned-url-generator-duration-${Environment}
+      AlarmDescription: Alert when function duration is high
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      ExtendedStatistic: p99
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5000  # 5 seconds
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PresignedUrlGeneratorFunction
+      TreatMissingData: notBreaching
+
+Outputs:
+  PresignedUrlGeneratorFunctionArn:
+    Description: ARN of the pre-signed URL generator Lambda function
+    Value: !GetAtt PresignedUrlGeneratorFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-FunctionArn
+
+  PresignedUrlApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub https://${PresignedUrlApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/api/upload/presigned-url
+    Export:
+      Name: !Sub ${AWS::StackName}-ApiEndpoint
+
+  PresignedUrlApiFunctionName:
+    Description: Lambda function name
+    Value: !Ref PresignedUrlGeneratorFunction
+    Export:
+      Name: !Sub ${AWS::StackName}-FunctionName

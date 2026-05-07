@@ -11,12 +11,12 @@
 - **Runtime**: AWS Lambda (Serverless)
 - **Framework**: FastAPI with Mangum (ASGI adapter for Lambda)
 - **Language**: Python — all backend code must use type hints and Pydantic models for request/response validation
-- **Chat endpoint**: Deployed as a **Lambda Function URL with Response Streaming** to bypass the 29-second API Gateway timeout during Claude 3.5 Sonnet Chain-of-Thought generation. The frontend calls this Function URL directly for streaming responses.
+- **Chat endpoint**: Deployed as a **Lambda Function URL with Response Streaming** to bypass the 29-second API Gateway timeout during Claude 4.6 Sonnet Chain-of-Thought generation. The frontend calls this Function URL directly for streaming responses.
 - **Document ingestion**: Event-driven pipeline orchestrated by **AWS Step Functions** (Standard Workflow), triggered automatically by S3 upload events via EventBridge — replaces the previous synchronous Lambda approach to avoid the 15-minute Lambda hard limit on large PDFs
 
 ## AI / ML
 - **Platform**: Amazon Bedrock
-- **Chat/Reasoning Model**: Claude 3.5 Sonnet (via Bedrock) — use Chain-of-Thought prompting for all RAG interactions
+- **Chat/Reasoning Model**: Claude 4.6 Sonnet (via Bedrock) — use Chain-of-Thought prompting for all RAG interactions
 - **Embeddings Model**: Amazon Titan Embeddings
 - **Document Processing**: Event-driven pipeline orchestrated by AWS Step Functions:
   1. **OCR**: `StartDocumentAnalysis` (async Textract API) — avoids Lambda timeout on large PDFs; Step Functions polls for job completion
@@ -27,10 +27,10 @@
 - **Vector Database**: Amazon OpenSearch Serverless (Vector Engine)
 - **Primary Database**: Amazon DynamoDB — user data, document metadata, query logs
 - **File Storage**: Amazon S3 (PDF uploads and processed document artifacts)
-- **Analytics**: DynamoDB Streams + Lambda aggregator for HR trend analytics
+- **Analytics**: DynamoDB Streams + Lambda aggregator for query trend analytics
   - Queries written to DynamoDB trigger a Stream → Lambda computes aggregates
-  - HR dashboard reads from a separate aggregates table
-  - AppSync is not used; HR analytics are batch-aggregated summaries, not live subscriptions
+  - Analytics dashboard reads from a separate aggregates table
+  - AppSync is not used; analytics are batch-aggregated summaries, not live subscriptions
 
 ## Security
 - **S3 access**: All S3 buckets are private; access via pre-signed URLs or Lambda with scoped IAM roles only
@@ -61,7 +61,7 @@
 | Chat streaming | AWS Lambda Function URL (Response Streaming) |
 | Document ingestion orchestration | AWS Step Functions (Standard Workflow) |
 | Document ingestion trigger | Amazon EventBridge (S3 upload events) |
-| AI reasoning | Amazon Bedrock (Claude 3.5 Sonnet) |
+| AI reasoning | Amazon Bedrock (Claude 4.6 Sonnet) |
 | Embeddings | Amazon Bedrock (Titan Embeddings) |
 | OCR | AWS Textract (async `StartDocumentAnalysis`) |
 | Markdown conversion + chunking | Custom Lambda (header-based semantic chunking) |
@@ -105,7 +105,7 @@ Key env vars — never commit to source control:
 AWS_REGION
 AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY
-BEDROCK_MODEL_ID                   # e.g. anthropic.claude-3-5-sonnet-20241022-v2:0
+BEDROCK_MODEL_ID                   # e.g. anthropic.claude-4-6-sonnet-20250514-v1:0
 BEDROCK_EMBEDDING_MODEL_ID         # e.g. amazon.titan-embed-text-v2:0
 OPENSEARCH_ENDPOINT
 DYNAMODB_TABLE_NAME

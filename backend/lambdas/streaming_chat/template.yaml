@@ -1,0 +1,228 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Streaming Chat Lambda with Function URL for Subscribt AI
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+  
+  BedrockModelId:
+    Type: String
+    Default: anthropic.claude-4-6-sonnet-20250514-v1:0
+    Description: Bedrock model ID for Claude 4.6 Sonnet
+  
+  BedrockEmbeddingModelId:
+    Type: String
+    Default: amazon.titan-embed-text-v2:0
+    Description: Bedrock embedding model ID
+  
+  OpenSearchEndpoint:
+    Type: String
+    Description: OpenSearch Serverless endpoint URL
+  
+  QueryLogTableName:
+    Type: String
+    Description: DynamoDB table name for query logs
+  
+  SimilarityThreshold:
+    Type: Number
+    Default: 0.7
+    Description: Minimum similarity score for grounded responses
+  
+  TopKResults:
+    Type: Number
+    Default: 5
+    Description: Number of similar chunks to retrieve
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 300  # 5 minutes for streaming responses
+    MemorySize: 1024  # Higher memory for embedding and LLM operations
+    Tracing: Active
+    Environment:
+      Variables:
+        POWERTOOLS_SERVICE_NAME: streaming-chat
+        POWERTOOLS_METRICS_NAMESPACE: SubscribtAI
+        LOG_LEVEL: INFO
+
+Resources:
+  # Lambda Function with Response Streaming
+  StreamingChatFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub subscribt-ai-streaming-chat-${Environment}
+      CodeUri: .
+      Handler: handler.handler
+      Description: Handles RAG pipeline with Chain-of-Thought prompting and streaming responses
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          BEDROCK_EMBEDDING_MODEL_ID: !Ref BedrockEmbeddingModelId
+          OPENSEARCH_ENDPOINT: !Ref OpenSearchEndpoint
+          DYNAMODB_TABLE_NAME: !Ref QueryLogTableName
+          SIMILARITY_THRESHOLD: !Ref SimilarityThreshold
+          TOP_K_RESULTS: !Ref TopKResults
+          AWS_REGION: !Ref AWS::Region
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
+              Resource:
+                - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/${BedrockModelId}
+                - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/${BedrockEmbeddingModelId}
+            - Effect: Allow
+              Action:
+                - aoss:APIAccessAll
+              Resource: !Sub arn:aws:aoss:${AWS::Region}:${AWS::AccountId}:collection/*
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+                - dynamodb:Query
+              Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${QueryLogTableName}
+            - Effect: Allow
+              Action:
+                - xray:PutTraceSegments
+                - xray:PutTelemetryRecords
+              Resource: '*'
+      Tags:
+        Environment: !Ref Environment
+        Service: subscribt-ai
+        Component: streaming-chat
+
+  # Lambda Function URL with Response Streaming
+  StreamingChatFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      AuthType: NONE  # Configure with IAM or Cognito for production
+      TargetFunctionArn: !GetAtt StreamingChatFunction.Arn
+      InvokeMode: RESPONSE_STREAM  # Enable response streaming
+      Cors:
+        AllowOrigins:
+          - '*'  # Configure appropriately for production
+        AllowMethods:
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+        MaxAge: 300
+
+  # Permission for Function URL to invoke Lambda
+  StreamingChatFunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref StreamingChatFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: '*'  # Configure appropriately for production
+      FunctionUrlAuthType: NONE
+
+  # CloudWatch Log Group
+  StreamingChatLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/subscribt-ai-streaming-chat-${Environment}
+      RetentionInDays: 30
+
+  # CloudWatch Alarms
+  StreamingChatErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub subscribt-ai-streaming-chat-errors-${Environment}
+      AlarmDescription: Alert when error rate exceeds threshold
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref StreamingChatFunction
+      TreatMissingData: notBreaching
+
+  StreamingChatThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub subscribt-ai-streaming-chat-throttles-${Environment}
+      AlarmDescription: Alert when function is throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref StreamingChatFunction
+      TreatMissingData: notBreaching
+
+  StreamingChatDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub subscribt-ai-streaming-chat-duration-${Environment}
+      AlarmDescription: Alert when function duration is high
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      ExtendedStatistic: p99
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 60000  # 60 seconds
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref StreamingChatFunction
+      TreatMissingData: notBreaching
+
+  # Custom metric for grounded vs ungrounded responses
+  GroundedResponsesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '[timestamp, request_id, level, msg="Successfully processed chat query", ...]'
+      LogGroupName: !Ref StreamingChatLogGroup
+      MetricTransformations:
+        - MetricName: GroundedResponses
+          MetricNamespace: SubscribtAI/Chat
+          MetricValue: '1'
+          DefaultValue: 0
+
+  UngroundedResponsesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '"Not addressed in the provided policy"'
+      LogGroupName: !Ref StreamingChatLogGroup
+      MetricTransformations:
+        - MetricName: UngroundedResponses
+          MetricNamespace: SubscribtAI/Chat
+          MetricValue: '1'
+          DefaultValue: 0
+
+Outputs:
+  StreamingChatFunctionArn:
+    Description: ARN of the streaming chat Lambda function
+    Value: !GetAtt StreamingChatFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-FunctionArn
+
+  StreamingChatFunctionUrl:
+    Description: Lambda Function URL for streaming chat
+    Value: !GetAtt StreamingChatFunctionUrl.FunctionUrl
+    Export:
+      Name: !Sub ${AWS::StackName}-FunctionUrl
+
+  StreamingChatFunctionName:
+    Description: Lambda function name
+    Value: !Ref StreamingChatFunction
+    Export:
+      Name: !Sub ${AWS::StackName}-FunctionName
