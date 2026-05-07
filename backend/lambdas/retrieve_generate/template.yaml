@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Knowledge Base Query Lambda using RetrieveAndGenerate API
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: python3.12
+    Architectures:
+      - x86_64
+    Tracing: Active
+    Environment:
+      Variables:
+        POWERTOOLS_SERVICE_NAME: kb-query
+        POWERTOOLS_METRICS_NAMESPACE: SubscribtAI
+        LOG_LEVEL: INFO
+
+Parameters:
+  KnowledgeBaseId:
+    Type: String
+    Description: Amazon Bedrock Knowledge Base ID
+  
+  BedrockModelArn:
+    Type: String
+    Description: ARN of the Bedrock model to use for generation
+    Default: arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0
+
+Resources:
+  KBQueryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: subscribt-kb-query
+      CodeUri: .
+      Handler: handler.handler
+      Description: Query knowledge base using RetrieveAndGenerate API
+      Environment:
+        Variables:
+          KNOWLEDGE_BASE_ID: !Ref KnowledgeBaseId
+          BEDROCK_MODEL_ARN: !Ref BedrockModelArn
+      Policies:
+        - Statement:
+            - Sid: BedrockKnowledgeBaseAccess
+              Effect: Allow
+              Action:
+                - bedrock:RetrieveAndGenerate
+                - bedrock:Retrieve
+              Resource:
+                - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/${KnowledgeBaseId}'
+            - Sid: BedrockModelAccess
+              Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource:
+                - !Ref BedrockModelArn
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - '*'
+          AllowMethods:
+            - POST
+            - OPTIONS
+          AllowHeaders:
+            - Content-Type
+          MaxAge: 300
+
+Outputs:
+  KBQueryFunctionUrl:
+    Description: Function URL for KB Query Lambda
+    Value: !GetAtt KBQueryFunctionUrl.FunctionUrl
+  
+  KBQueryFunctionArn:
+    Description: ARN of the KB Query Lambda function
+    Value: !GetAtt KBQueryFunction.Arn
