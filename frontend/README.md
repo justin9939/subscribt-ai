@@ -1,14 +1,13 @@
 # Subscribt AI Frontend
 
-Next.js 14 frontend application for the Subscribt AI policy analysis platform.
+Next.js 15 frontend application for the Subscribt AI policy analysis platform.
 
 ## Tech Stack
 
-- **Framework**: Next.js 14 (App Router)
+- **Framework**: Next.js 15 (App Router)
 - **Language**: TypeScript (strict mode)
-- **Styling**: Tailwind CSS
-- **Component Library**: shadcn/ui
-- **Icons**: Lucide React
+- **Styling**: Tailwind CSS + hand-written CSS Modules (`app/page.module.css`)
+- **Component Library**: shadcn/ui is configured (`components.json`) but no components have been generated yet; Radix UI and `lucide-react` are installed dependencies but not yet used in code
 
 ## Getting Started
 
@@ -52,42 +51,20 @@ npm run lint
 
 ## Project Structure
 
+The app is currently a single page — there are no `components/`, `lib/`, `hooks/`, `types/`, or `api/` directories yet:
+
 ```
 frontend/
-├── app/                    # Next.js App Router
-│   ├── (hr)/              # HR Manager routes
-│   ├── (employee)/        # Employee routes
-│   ├── api/               # API routes
-│   ├── globals.css        # Global styles with Tailwind
-│   ├── layout.tsx         # Root layout
-│   └── page.tsx           # Home page
-├── components/            # React components
-│   ├── hr/               # HR-specific components
-│   ├── employee/         # Employee-specific components
-│   └── ui/               # shadcn/ui components
-├── lib/                  # Core business logic
-│   ├── ai/              # AI/RAG logic
-│   ├── db/              # Database queries
-│   ├── opensearch/      # Vector search
-│   ├── chat/            # Chat utilities
-│   └── utils.ts         # Utility functions
-├── hooks/               # Custom React hooks
-├── types/               # TypeScript type definitions
-└── public/              # Static assets
+└── app/
+    ├── globals.css        # Design tokens (CSS variables) + Tailwind directives
+    ├── layout.tsx         # Root layout (Inter font, page metadata)
+    ├── page.tsx           # The entire app: upload widget + query form + results
+    └── page.module.css    # CSS Modules styles consumed by page.tsx
 ```
 
 ## shadcn/ui Components
 
-The project uses shadcn/ui for UI components. Components are installed in `components/ui/`.
-
-### Installed Components
-
-- Button
-- Card
-- Input
-- Label
-- Textarea
-- Toast
+`components.json` configures shadcn/ui (New York style, `slate` base color, CSS variables), but **no components have been generated into `components/ui/` yet**. All current UI (buttons, form, cards) is hand-written in `page.tsx`/`page.module.css`, not shadcn primitives.
 
 ### Adding New Components
 
@@ -116,7 +93,7 @@ Available components: https://ui.shadcn.com/docs/components
 
 ## Styling
 
-The project uses Tailwind CSS with CSS variables for theming. Color scheme and design tokens are defined in `app/globals.css`.
+Design tokens are defined twice in `app/globals.css`, deliberately kept in sync: plain CSS custom properties (the "Montreaux" palette — e.g. `--color-bg`, `--color-accent`) consumed by `page.module.css`, plus the same colors re-expressed as HSL triples (`--background`, `--primary`, etc.) for shadcn/Tailwind compatibility once shadcn components are added.
 
 ### Theme Customization
 
@@ -124,12 +101,15 @@ Edit the CSS variables in `app/globals.css` to customize the theme:
 
 ```css
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
-  --primary: 221.2 83.2% 53.3%;
+  --color-bg: #FAFAF8;
+  --color-accent: #2E5D47;
+  --background: 45 20% 98%;
+  --primary: 152 34% 27%;
   /* ... */
 }
 ```
+
+If you change a color, update both the `--color-*` variable and its HSL equivalent — nothing keeps them in sync automatically.
 
 ## Type Safety
 
@@ -146,21 +126,22 @@ Key TypeScript features enabled:
 
 ## Environment Variables
 
-Create a `.env.local` file for local development:
+Create a `.env.local` file for local development (see `.env.example`):
 
 ```env
-NEXT_PUBLIC_CHAT_LAMBDA_FUNCTION_URL=your-lambda-url
-NEXT_PUBLIC_API_ENDPOINT=your-api-endpoint
+AWS_REGION=your-aws-region
+NEXT_PUBLIC_KB_FUNCTION_URL=https://your-kb-function-url.lambda-url.your-aws-region.on.aws/
+NEXT_PUBLIC_UPLOAD_FUNCTION_URL=https://your-upload-function-url.lambda-url.your-aws-region.on.aws/
 ```
+
+These are Lambda Function URLs produced by `backend/deploy.sh` (see the top-level [README](../README.md)) — `page.tsx` reads them directly via `process.env` and calls them from the browser.
 
 ## Deployment
 
-The frontend is deployed to AWS Amplify. Push to the main branch to trigger automatic deployment.
+No CI/CD is configured in this repo. Per the top-level README, the intended path is deploying this Next.js app to Vercel; there is no Amplify configuration present.
 
 ## Contributing
 
-- Follow the project structure conventions
-- Maintain persona separation (HR vs Employee)
-- Use shadcn/ui components as the base
+- Use shadcn/ui components as the base for any new UI rather than hand-rolled CSS Modules
 - All new code must be TypeScript
 - Run type checking before committing

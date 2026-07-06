@@ -6,10 +6,12 @@ Ask any questions about the uploaded policies for accurate answeres grounded in 
 ## Architecture
 
 - **Frontend**: Next.js 15 (TypeScript) served locally or deployed to Vercel
-- **Backend**: Two AWS Lambda functions deployed via SAM
+- **Backend**: Two AWS Lambda functions, packaged with AWS SAM and deployed via a custom AWS CLI script (`backend/deploy.sh`)
   - `subscribt-kb-query` — queries the Bedrock Knowledge Base and returns grounded answers
   - `subscribt-upload-document` — uploads a document to S3 and ingests it into the Knowledge Base
 - **AWS Services**: Amazon Bedrock (Knowledge Base + Claude model), S3, Lambda
+
+> **Status:** The Lambda source code these functions depend on (`backend/lambdas/retrieve_generate/`, including `handler.py` and `template.yaml` for both `KBQueryFunction` and `UploadDocumentFunction`) is not currently present in this repository — it was removed in a prior cleanup commit. `backend/deploy.sh` and the "Backend Deployment" steps below describe the intended workflow, but `sam build` has nothing to build until that source is restored or rewritten. Only `frontend/` currently runs end-to-end (against Lambda URLs from a previous deployment).
 
 ---
 
