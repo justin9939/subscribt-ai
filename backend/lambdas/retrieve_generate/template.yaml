@@ -1,0 +1,139 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Subscribt AI Lambda functions (KB query + document upload/ingestion).
+  NOTE: sam build only reads CodeUri/Handler/Runtime from this template. The
+  live Lambda's env vars and IAM role are set by backend/deploy.sh's raw AWS
+  CLI calls, not by this file's Parameters/Environment/Policies. Keep the two
+  in sync by hand.
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: python3.12
+    Architectures:
+      - x86_64
+    Tracing: Active
+
+Parameters:
+  KnowledgeBaseId:
+    Type: String
+    Description: Amazon Bedrock Knowledge Base ID
+  DataSourceId:
+    Type: String
+    Description: Bedrock Knowledge Base S3 data source ID
+  S3BucketName:
+    Type: String
+    Description: S3 bucket storing uploaded documents
+  BedrockModelArn:
+    Type: String
+    Description: ARN/inference-profile of the Bedrock model used for generation
+  DocumentsPrefix:
+    Type: String
+    Default: documents/
+    Description: S3 key prefix under which uploaded documents live
+
+Resources:
+  KBQueryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: subscribt-kb-query
+      CodeUri: kb_query/
+      Handler: handler.handler
+      Description: Query knowledge base using RetrieveAndGenerate API
+      Environment:
+        Variables:
+          KNOWLEDGE_BASE_ID: !Ref KnowledgeBaseId
+          BEDROCK_MODEL_ARN: !Ref BedrockModelArn
+          POWERTOOLS_SERVICE_NAME: kb-query
+          LOG_LEVEL: INFO
+      Policies:
+        - Statement:
+            - Sid: BedrockKnowledgeBaseAccess
+              Effect: Allow
+              Action:
+                - bedrock:RetrieveAndGenerate
+                - bedrock:Retrieve
+              Resource:
+                - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/${KnowledgeBaseId}'
+            - Sid: BedrockModelAccess
+              Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource:
+                - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/*'
+                - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - '*'
+          AllowMethods:
+            - POST
+            - OPTIONS
+          AllowHeaders:
+            - Content-Type
+          MaxAge: 300
+
+  UploadDocumentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: subscribt-upload-document
+      CodeUri: upload_document/
+      Handler: handler.handler
+      Timeout: 60
+      Description: Upload a document to S3 and trigger Knowledge Base ingestion
+      Environment:
+        Variables:
+          KNOWLEDGE_BASE_ID: !Ref KnowledgeBaseId
+          DATA_SOURCE_ID: !Ref DataSourceId
+          S3_BUCKET_NAME: !Ref S3BucketName
+          DOCUMENTS_PREFIX: !Ref DocumentsPrefix
+          POWERTOOLS_SERVICE_NAME: upload-document
+          LOG_LEVEL: INFO
+      Policies:
+        - Statement:
+            - Sid: S3DocumentAccess
+              Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:DeleteObject
+                - s3:GetObject
+              Resource: !Sub 'arn:aws:s3:::${S3BucketName}/*'
+            - Sid: S3ListAccess
+              Effect: Allow
+              Action: s3:ListBucket
+              Resource: !Sub 'arn:aws:s3:::${S3BucketName}'
+            - Sid: BedrockIngestionAccess
+              Effect: Allow
+              Action: bedrock:StartIngestionJob
+              Resource: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/${KnowledgeBaseId}'
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - '*'
+          AllowMethods:
+            - POST
+            - OPTIONS
+          AllowHeaders:
+            - Content-Type
+          MaxAge: 300
+
+Outputs:
+  KBQueryFunctionUrl:
+    Description: Function URL for the KB Query Lambda
+    Value: !GetAtt KBQueryFunctionUrl.FunctionUrl
+
+  KBQueryFunctionArn:
+    Description: ARN of the KB Query Lambda function
+    Value: !GetAtt KBQueryFunction.Arn
+
+  UploadDocumentFunctionUrl:
+    Description: Function URL for the Upload Document Lambda
+    Value: !GetAtt UploadDocumentFunctionUrl.FunctionUrl
+
+  UploadDocumentFunctionArn:
+    Description: ARN of the Upload Document Lambda function
+    Value: !GetAtt UploadDocumentFunction.Arn

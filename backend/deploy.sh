@@ -4,6 +4,10 @@
 # Example:
 #   ./deploy.sh UFPCUNTCJU 3UIK4CXCOV my-bucket \
 #     arn:aws:bedrock:us-west-2:416114855901:inference-profile/us.anthropic.claude-sonnet-4-6
+#
+# NOTE: this script's env-var strings and *_POLICY JSON below are the sole
+# source of truth for the live Lambda config -- lambdas/retrieve_generate/template.yaml
+# is only used by `sam build` and is not deployed by this script. Keep both in sync by hand.
 
 set -euo pipefail
 
@@ -170,10 +174,7 @@ UPLOAD_POLICY=$(cat <<EOF
     },
     {
       "Effect": "Allow",
-      "Action": [
-        "bedrock:IngestKnowledgeBaseDocuments",
-        "bedrock:DeleteKnowledgeBaseDocuments"
-      ],
+      "Action": "bedrock:StartIngestionJob",
       "Resource": "arn:aws:bedrock:${REGION}:${ACCOUNT_ID}:knowledge-base/${KNOWLEDGE_BASE_ID}"
     }
   ]
